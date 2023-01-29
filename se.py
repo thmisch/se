@@ -11,11 +11,10 @@ It should only include the features that I ACTUALLY USE. SHOULDN'T be a complete
 
 
 class Selection:
-    def __init__(self, start: int = 0, end: int = 0):
+    def __init__(self, start: int = 0, end: int = 0, wish: int = None):
         self.start = start
         self.end = end
-
-        self.wish_x_start = None
+        self.wish_x_start = wish
 
 
 class Text:
@@ -105,17 +104,29 @@ class Text:
                 print("set wish")
             else:
                 # -1 so we don't end up with the cursor ON the newline
-                new_select = Selection(prev_prev_newline_idx + chars_into_line)
+                new_select = Selection(prev_prev_newline_idx + chars_into_line, wish=select.wish_x_start)
                 print("normal")
 
         new_select.end = new_select.start + (select.end - select.start)
         return new_select
 
+# HOWTO implement a DOWN function?
+"""
+make selection with start=len(text)-1
+UP-select that one until it stays the same in a loop
+after each up move do this:
+    if actual_start > result_start
+actual
+walking = len(text)-1
+while walking > actual:
+    walking = go_line_up()
+    walking.wish = actual.whish_x_start
 
+"""
 T = Text(None)
 # T.text = "ABOVE\nAB\nCDEFG\n"
-T.text = "\nABCD\n"
-select = Selection(2, 3)
+T.text = "BA\nABCD\n"
+select = Selection(3, 4)
 print(T.text[select.start : select.end])
 # print(T.text[: select.start].replace("\n", "n"))
 # print(T.text[select.start :].replace("\n", "n"))
@@ -124,8 +135,6 @@ print("initial selection: ", select.__dict__)
 ret = T.go_line_up(select)
 print("new selection: ", ret.__dict__)
 
-ret = T.go_line_up(ret)
-print("new selection: ", ret.__dict__)
 # T.insert(ret, "TEST")
 # print(T.text.replace('\n', 'n'))
 

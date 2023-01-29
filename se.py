@@ -1,3 +1,4 @@
+#!/bin/env python3
 # somedit - a small text editor
 """
 MAIN IDEA:
@@ -14,7 +15,7 @@ class Selection:
         self.start = start
         self.end = end
 
-        self.wish_line_start = None
+        self.wish_x_start = None
 
 
 class Text:
@@ -60,7 +61,7 @@ class Text:
     def go_line(self, line: int, stay_x: bool = True) -> Selection:
         pass
 
-    def prev_newline_idx(self, select: Selection) -> int:
+    def prev_newline_idx(self, select: Selection) -> int or None:
         result = self.text[: select.start].rfind(self.newline)
         return result if not result == -1 else 0
 
@@ -78,28 +79,33 @@ class Text:
 
         9 10 11 12 13 14
         C D  E  F  G  n
-             ^ 
+             ^
         """
         prev_newline_idx = self.prev_newline_idx(select)
         prev_prev_newline_idx = self.prev_newline_idx(Selection(prev_newline_idx))
-        print(prev_newline_idx, prev_prev_newline_idx)
-        above_line_len = prev_newline_idx - prev_prev_newline_idx -1
-        print("ABOVE_LINE_LEN", above_line_len)
-        chars_into_line = select.start - prev_newline_idx
 
-        if select.wish_line_start and select.wish_line_start <= above_line_len:
-            new_select = Selection(prev_prev_newline_idx + select.wish_line_start)
+        above_line_len = prev_newline_idx - prev_prev_newline_idx
+        if above_line_len:
+            above_line_len -= 1
+
+        chars_into_line = select.start - prev_newline_idx
+        print("above", above_line_len)
+        print("chars", chars_into_line)
+
+        if select.wish_x_start and select.wish_x_start <= above_line_len:
+            new_select = Selection(prev_prev_newline_idx + select.wish_x_start)
             print("restored wish")
         else:
             if above_line_len < chars_into_line:
                 # want to move n chars into line, but we can't since the line is
                 # smaller than our current position.
-                # -> set wish_line_start to that position
-                new_select = Selection(prev_newline_idx - 1)
-                new_select.wish_line_start = chars_into_line-1
+                # -> set wish_x_start to that position
+                new_select = Selection(prev_newline_idx)
+                new_select.wish_x_start = chars_into_line
                 print("set wish")
             else:
-                new_select = Selection(prev_prev_newline_idx + chars_into_line-1)
+                # -1 so we don't end up with the cursor ON the newline
+                new_select = Selection(prev_prev_newline_idx + chars_into_line)
                 print("normal")
 
         new_select.end = new_select.start + (select.end - select.start)
@@ -107,16 +113,26 @@ class Text:
 
 
 T = Text(None)
-T.text = "ABOVE\nAB\nCDEFG\n"
-select = Selection(11, 12)
+# T.text = "ABOVE\nAB\nCDEFG\n"
+T.text = "\nABCD\n"
+select = Selection(2, 3)
 print(T.text[select.start : select.end])
-print(T.text[: select.start].replace("\n", "n"))
-print(T.text[select.start :].replace("\n", "n"))
+# print(T.text[: select.start].replace("\n", "n"))
+# print(T.text[select.start :].replace("\n", "n"))
+
 print("initial selection: ", select.__dict__)
 ret = T.go_line_up(select)
 print("new selection: ", ret.__dict__)
+
 ret = T.go_line_up(ret)
 print("new selection: ", ret.__dict__)
-print(T.text[ret.start : ret.end])
-#T.delete(ret)
-#print(T.text.replace('\n', 'n'))
+# T.insert(ret, "TEST")
+# print(T.text.replace('\n', 'n'))
+
+# print(T.text[ret.start : ret.end].replace('\n', 'n'))
+
+# ret = T.go_line_up(ret)
+# print("new selection: ", ret.__dict__)
+
+# ret = T.go_line_up(ret)
+# print("new selection: ", ret.__dict__)

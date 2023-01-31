@@ -84,29 +84,21 @@ class Text:
             return select
 
         above_line_len = prev_newline_idx - prev_prev_newline_idx
-
-        if above_line_len > 0:
-            above_line_len -= 1
-
         chars_into_line = select.start - prev_newline_idx
-        print("above", above_line_len)
-        print("chars", chars_into_line)
-
+        
+        # Is a wish set, and is it valid?
         if select.wish_x_start and select.wish_x_start <= above_line_len:
             new_select = Selection(prev_prev_newline_idx + select.wish_x_start-1)
-            print("restored wish")
+
+        # Can I move up one line at my current chars_into_line position?
+        elif above_line_len < chars_into_line:
+            # No I can't, but I'd wish to
+            new_select = Selection(prev_newline_idx-1)
+            new_select.wish_x_start = chars_into_line
         else:
-            if above_line_len < chars_into_line:
-                # want to move n chars into line, but we can't since the line is
-                # smaller than our current position.
-                # -> set wish_x_start to that position
-                new_select = Selection(prev_newline_idx-1)
-                new_select.wish_x_start = chars_into_line
-                print("set wish")
-            else:
-                # -1 so we don't end up with the cursor ON the newline
-                new_select = Selection(prev_prev_newline_idx + chars_into_line-1, wish=select.wish_x_start)
-                print("normal")
+            # Yes I can.
+            # -1 so we don't end up with the cursor ON the newline
+            new_select = Selection(prev_prev_newline_idx + chars_into_line-1)
 
         new_select.end = new_select.start + (select.end - select.start)
         return new_select

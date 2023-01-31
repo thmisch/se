@@ -31,16 +31,12 @@ class Text:
         except FileNotFoundError:
             self.write()
         finally:
-            self.add_newline()
+            if not self.text.endswith(self.newline):
+                self.text += "\n"
 
     def write(self) -> None:
         with open(self.filename, "w") as f:
             f.write(self.text)
-
-    # Add the newline char if needed
-    def add_newline(self) -> None:
-        if not self.text.endswith(self.newline):
-            self.text += "\n"
 
     # Insert `what` at `location` and return `what` length
     def insert(self, select: Selection, what: str) -> int:
@@ -83,8 +79,13 @@ class Text:
         prev_newline_idx = self.prev_newline_idx(select)
         prev_prev_newline_idx = self.prev_newline_idx(Selection(prev_newline_idx))
 
+        if prev_newline_idx == prev_prev_newline_idx:
+            print("STH WRONG, THE END OR START REACHED")
+            return select
+
         above_line_len = prev_newline_idx - prev_prev_newline_idx
-        if above_line_len:
+
+        if above_line_len > 0:
             above_line_len -= 1
 
         chars_into_line = select.start - prev_newline_idx
@@ -92,56 +93,39 @@ class Text:
         print("chars", chars_into_line)
 
         if select.wish_x_start and select.wish_x_start <= above_line_len:
-            new_select = Selection(prev_prev_newline_idx + select.wish_x_start)
+            new_select = Selection(prev_prev_newline_idx + select.wish_x_start-1)
             print("restored wish")
         else:
             if above_line_len < chars_into_line:
                 # want to move n chars into line, but we can't since the line is
                 # smaller than our current position.
                 # -> set wish_x_start to that position
-                new_select = Selection(prev_newline_idx)
+                new_select = Selection(prev_newline_idx-1)
                 new_select.wish_x_start = chars_into_line
                 print("set wish")
             else:
                 # -1 so we don't end up with the cursor ON the newline
-                new_select = Selection(prev_prev_newline_idx + chars_into_line, wish=select.wish_x_start)
+                new_select = Selection(prev_prev_newline_idx + chars_into_line-1, wish=select.wish_x_start)
                 print("normal")
 
         new_select.end = new_select.start + (select.end - select.start)
         return new_select
 
-# HOWTO implement a DOWN function?
-"""
-make selection with start=len(text)-1
-UP-select that one until it stays the same in a loop
-after each up move do this:
-    if actual_start > result_start
-actual
-walking = len(text)-1
-while walking > actual:
-    walking = go_line_up()
-    walking.wish = actual.whish_x_start
-
-"""
 T = Text(None)
-# T.text = "ABOVE\nAB\nCDEFG\n"
-T.text = "BA\nABCD\n"
-select = Selection(3, 4)
+T.text = "ABOVE\nAB\nCDEFG\n"
+select = Selection(11, 12)
+
 print(T.text[select.start : select.end])
-# print(T.text[: select.start].replace("\n", "n"))
-# print(T.text[select.start :].replace("\n", "n"))
-
 print("initial selection: ", select.__dict__)
-ret = T.go_line_up(select)
-print("new selection: ", ret.__dict__)
+print(T.text.replace('\n', 'n'))
 
-# T.insert(ret, "TEST")
-# print(T.text.replace('\n', 'n'))
+def do_test(n, sel):
+    for _ in range(n):
+        sel = T.go_line_up(sel)
+        print("new selection: ", sel.__dict__)
+        print(T.text[sel.start : sel.end].replace('\n', 'n'))
+    return sel
 
-# print(T.text[ret.start : ret.end].replace('\n', 'n'))
-
-# ret = T.go_line_up(ret)
-# print("new selection: ", ret.__dict__)
-
-# ret = T.go_line_up(ret)
-# print("new selection: ", ret.__dict__)
+select = do_test(4, select)
+T.replace(select, "!")
+print(T.text.replace('\n', 'n'))

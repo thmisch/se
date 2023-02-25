@@ -14,6 +14,11 @@ class Selection:
         self.end = end
         self.chars_into_line = offset
 
+class LineDir(Enum):
+    Up =    auto()
+    Down =  auto()
+    Left =  auto()
+    Right = auto()
 
 class Text:
     def __init__(self, path: str = None):
@@ -22,14 +27,6 @@ class Text:
         self.path = path
 
         self.read()
-
-    class LineDir(Enum):
-        Up = auto()
-        Down = auto()
-
-    class OnLineDir(Enum):
-        Left = auto()
-        Right = auto()
 
     def read(self):
         try:
@@ -50,17 +47,18 @@ class Text:
         # Count the number of newline characters before the start of the selection.
         return self.data.count(self.newline, 0, select.start)
 
-    # Move the selection to a specific line in the data.
-    def line(self, select: Selection, line_num: int, line_cache: [str] = None) -> Selection:
-        lines = line_cache
-        if not line_cache:
+    # Move the selection to a specific line and/or char in the data.
+    def line(self, select: Selection, line_num: int, x_pos: int= 1, cache: [str] = None) -> Selection:
+        lines = cache
+        if not cache:
             lines = self.data.split(self.newline)[:-1]
 
         # use the correct line
-        if line_num < 0:
-            line_num = 0
-        elif line_num >= len(lines):
-            line_num = len(lines) - 1
+        line_num %= len(lines)
+
+        # if specified, set the x starting pos
+        if x_pos > 1:
+            select.chars_into_line = x_pos
 
         chars_into_line = select.chars_into_line
         if chars_into_line < 1:
@@ -68,13 +66,13 @@ class Text:
             l = (line_num - 1) % len(lines)
             select.chars_into_line = len(lines[l]) - offset
 
-            return self.line(select, l, lines)
+            return self.line(select, l, cache=lines)
 
         elif chars_into_line > len(lines[line_num]):
             cur_len = len(lines[line_num])
             select.chars_into_line = chars_into_line - cur_len
 
-            return self.line(select, (line_num + 1) % len(lines), lines)
+            return self.line(select, (line_num + 1) % len(lines), cache = lines)
 
         # find the starting index of `line_num`
         start = chars_into_line - 1  # -1 since start is an index, and chars_into_line is not
@@ -91,31 +89,30 @@ class Text:
 
         return Selection(start, end, select.chars_into_line)
 
+    # Move around using deltas.
     def line_delta(self, select: Selection, direction: LineDir, delta: int = 1) -> Selection:
         delta = abs(delta)
-        if direction == self.LineDir.Up:
-            delta = -delta
-        return self.line(select, self.line_num(select) + delta)
+        if direction in LineDir:
+            if direction in (LineDir.Up, LineDir.Left):
+                delta = -delta
 
-    # Set the x starting position of the selection
-    def line_x(self, select: Selection, x: int) -> Selection:
-        select.chars_into_line = x
-        return self.line_delta(select, None, 0)
+            if direction in (LineDir.Up, LineDir.Down):
+                return self.line(select, self.line_num(select) + delta)
 
-    def line_x_delta(self, select: Selection, direction: OnLineDir, delta: int = 1) -> Selection:
-        delta = abs(delta)
-        if direction == self.OnLineDir.Left:
-            delta = -delta
-        return self.line_x(select, select.chars_into_line + delta)
+            elif direction in (LineDir.Left, LineDir.Right):
+                select.chars_into_line += delta
+                return self.line(select, self.line_num(select))
+        else:
+            raise ValueError("Wrong direction specified.")
 
     # Insert `what` at `location` and return length of `what`
     def insert(self, select: Selection, what: str) -> int:
-        self.text = self.text[: select.start] + what + self.text[select.start :]
+        self.data = self.data[: select.start] + what + self.data[select.start :]
         return len(what)
 
     # Delete the text from range provided with `selection`
     def delete(self, select: Selection) -> None:
-        self.text = self.text[: select.start] + self.text[select.end :]
+        self.data = self.data[: select.start] + self.data[select.end :]
 
     # Wrapper around insert & delete
     def replace(self, select: Selection, what: str) -> None:
@@ -139,7 +136,9 @@ YOh
 print(f"'{t.selected_text(sel)}'")
 print(f"cur line: {t.line_num(sel)}")
 
-sel = t.line_x_delta(sel, t.OnLineDir.Left, 2)
+sel = t.line_delta(sel, LineDir.Down, 2)
+sel = t.line(sel, line_num=0, x_pos=4)
+#sel = t.line_delta(sel, LineDir.Right, 3)
 
 print(f"cur line: {t.line_num(sel)}")
 

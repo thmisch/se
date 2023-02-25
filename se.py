@@ -1,8 +1,11 @@
+#!/usr/bin/env python3
 from enum import Enum, auto
-from xdg import xdg_config_home
-from pathlib import Path
-from config import *
 
+# Modify this to your liking
+class Config:
+    newlines = ('\n', '\r\n')
+    default_newline = newlines[0]
+    tabsize = 4
 
 class Selection:
     def __init__(self, start: int = 0, end: int = 1, offset: int = 1):
@@ -19,13 +22,6 @@ class Text:
         self.newline = self.config.default_newline
         self.read()
 
-    def read(self):
-        try:
-            with open(self.path, "r") as f:
-                self.data = f.read()
-        except FileNotFoundError:
-            self.write()
-
     class LineDir(Enum):
         Up = auto()
         Down = auto()
@@ -33,6 +29,13 @@ class Text:
     class OnLineDir(Enum):
         Left = auto()
         Right = auto()
+
+    def read(self):
+        try:
+            with open(self.path, "r") as f:
+                self.data = f.read()
+        except FileNotFoundError:
+            self.write()
 
     def write(self):
         with open(self.path, "w") as f:

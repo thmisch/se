@@ -3,9 +3,10 @@ from enum import Enum, auto
 
 # Modify this to your liking
 class Config:
-    newlines = ('\n', '\r\n')
+    newlines = ("\n", "\r\n")
     default_newline = newlines[0]
     tabsize = 4
+
 
 class Selection:
     def __init__(self, start: int = 0, end: int = 1, offset: int = 1):
@@ -16,10 +17,10 @@ class Selection:
 
 class Text:
     def __init__(self, path: str = None):
-        self.data = newline
+        self.newline = Config.default_newline
+        self.data = self.newline
         self.path = path
 
-        self.newline = self.config.default_newline
         self.read()
 
     class LineDir(Enum):
@@ -50,8 +51,10 @@ class Text:
         return self.data.count(self.newline, 0, select.start)
 
     # Move the selection to a specific line in the data.
-    def line(self, select: Selection, line_num: int) -> Selection:
-        lines = self.data.split(self.newline)[:-1]
+    def line(self, select: Selection, line_num: int, line_cache: [str] = None) -> Selection:
+        lines = line_cache
+        if not line_cache:
+            lines = self.data.split(self.newline)[:-1]
 
         # use the correct line
         if line_num < 0:
@@ -59,15 +62,22 @@ class Text:
         elif line_num >= len(lines):
             line_num = len(lines) - 1
 
-        # set the offset correctly
         chars_into_line = select.chars_into_line
-        if chars_into_line > len(lines[line_num]):
-            chars_into_line = len(lines[line_num])
+        if chars_into_line < 1:
+            offset = 1 - (chars_into_line + 1)
+            l = (line_num - 1) % len(lines)
+            select.chars_into_line = len(lines[l]) - offset
+
+            return self.line(select, l, lines)
+
+        elif chars_into_line > len(lines[line_num]):
+            cur_len = len(lines[line_num])
+            select.chars_into_line = chars_into_line - cur_len
+
+            return self.line(select, (line_num + 1) % len(lines), lines)
 
         # find the starting index of `line_num`
-        start = (
-            chars_into_line - 1
-        )  # -1 since start is an index, and chars_into_line is not
+        start = chars_into_line - 1  # -1 since start is an index, and chars_into_line is not
         for i in range(line_num):
             start += len(lines[i]) + len(self.newline)
 
@@ -81,26 +91,22 @@ class Text:
 
         return Selection(start, end, select.chars_into_line)
 
-    def line_delta(
-        self, select: Selection, direction: Text.LineDir, delta: int = 1
-    ) -> Selection:
+    def line_delta(self, select: Selection, direction: LineDir, delta: int = 1) -> Selection:
         delta = abs(delta)
-        if direction == Text.LineDir.Up:
+        if direction == self.LineDir.Up:
             delta = -delta
-        return self.go_line(select, self.line_num(select) + delta)
+        return self.line(select, self.line_num(select) + delta)
 
     # Set the x starting position of the selection
     def line_x(self, select: Selection, x: int) -> Selection:
         select.chars_into_line = x
         return self.line_delta(select, None, 0)
 
-    def line_x_delta(
-        self, select: Selection, direction: Text.OnLineDir, delta: int = 1
-    ) -> Selection:
+    def line_x_delta(self, select: Selection, direction: OnLineDir, delta: int = 1) -> Selection:
         delta = abs(delta)
-        if direction == Text.OnLineDir.Left:
+        if direction == self.OnLineDir.Left:
             delta = -delta
-        return self.line_pos(select, select.chars_into_line + delta)
+        return self.line_x(select, select.chars_into_line + delta)
 
     # Insert `what` at `location` and return length of `what`
     def insert(self, select: Selection, what: str) -> int:
@@ -117,10 +123,9 @@ class Text:
         self.insert(select, what)
 
 
-sel = Selection(0, 5, 1)
+sel = Selection(0, 2, 1)
 print(sel.__dict__)
 t = Text("test.txt")
-print(t.data)
 """
 0123
 ABC
@@ -133,8 +138,9 @@ YOh
 """
 print(f"'{t.selected_text(sel)}'")
 print(f"cur line: {t.line_num(sel)}")
-sel = t.move_to_line(sel, t.line_num(sel) + 1)
-sel = t.move_to_line(sel, t.line_num(sel) + 1)
+
+sel = t.line_x_delta(sel, t.OnLineDir.Left, 2)
+
 print(f"cur line: {t.line_num(sel)}")
 
 print(sel.__dict__)

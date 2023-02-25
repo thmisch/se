@@ -1,44 +1,105 @@
-#!/bin/env python3
-# somedit - a small text editor
-"""
-MAIN IDEA:
-everything should be relative, there should just be a two positions a start and stop
-position of the cursor.
-There sould also be support for multiple of these selections
-
-It should only include the features that I ACTUALLY USE. SHOULDN'T be a complete framework for EVERYTHING.
-"""
+from enum import Enum, auto
+from xdg import xdg_config_home
+from pathlib import Path
+from config import *
 
 
 class Selection:
-    def __init__(self, start: int = 0, end: int = 0, wish: int = None):
+    def __init__(self, start: int = 0, end: int = 1, offset: int = 1):
         self.start = start
         self.end = end
-        self.wish_x_start = wish
+        self.chars_into_line = offset
 
 
 class Text:
-    def __init__(self, filename: str, newline: str = "\n"):
-        self.filename = filename
-        self.newline = newline
+    def __init__(self, path: str = None):
+        self.data = newline
+        self.path = path
 
-        self.text: str = newline
+        self.newline = self.config.default_newline
+        self.read()
 
-    def read(self) -> None:
+    def read(self):
         try:
-            with open(self.filename) as f:
-                self.text = f.read()
+            with open(self.path, "r") as f:
+                self.data = f.read()
         except FileNotFoundError:
             self.write()
-        finally:
-            if not self.text.endswith(self.newline):
-                self.text += "\n"
 
-    def write(self) -> None:
-        with open(self.filename, "w") as f:
-            f.write(self.text)
+    class LineDir(Enum):
+        Up = auto()
+        Down = auto()
 
-    # Insert `what` at `location` and return `what` length
+    class OnLineDir(Enum):
+        Left = auto()
+        Right = auto()
+
+    def write(self):
+        with open(self.path, "w") as f:
+            f.write(self.data)
+
+    def selected_text(self, select: Selection) -> str:
+        return self.data[select.start : select.end]
+
+    # Return the line select.start is currently on.
+    def line_num(self, select: Selection) -> int:
+        # Count the number of newline characters before the start of the selection.
+        return self.data.count(self.newline, 0, select.start)
+
+    # Move the selection to a specific line in the data.
+    def line(self, select: Selection, line_num: int) -> Selection:
+        lines = self.data.split(self.newline)[:-1]
+
+        # use the correct line
+        if line_num < 0:
+            line_num = 0
+        elif line_num >= len(lines):
+            line_num = len(lines) - 1
+
+        # set the offset correctly
+        chars_into_line = select.chars_into_line
+        if chars_into_line > len(lines[line_num]):
+            chars_into_line = len(lines[line_num])
+
+        # find the starting index of `line_num`
+        start = (
+            chars_into_line - 1
+        )  # -1 since start is an index, and chars_into_line is not
+        for i in range(line_num):
+            start += len(lines[i]) + len(self.newline)
+
+        # update end of selection
+        end = start + (select.end - select.start)
+
+        # we never want the end to exceed the actual file length
+        max_len = len(self.data) - len(self.newline)
+        if end > max_len:
+            end = max_len
+
+        return Selection(start, end, select.chars_into_line)
+
+    def line_delta(
+        self, select: Selection, direction: Text.LineDir, delta: int = 1
+    ) -> Selection:
+        delta = abs(delta)
+        if direction == Text.LineDir.Up:
+            delta = -delta
+        return self.go_line(select, self.line_num(select) + delta)
+
+    # Set the x starting position of the selection
+    def line_x(self, select: Selection, x: int) -> Selection:
+        select.chars_into_line = x
+        return self.line_delta(select, None, 0)
+
+    def line_x_delta(
+        self, select: Selection, direction: Text.OnLineDir, delta: int = 1
+    ) -> Selection:
+        delta = abs(delta)
+        if direction == Text.OnLineDir.Left:
+            delta = -delta
+        return self.line_pos(select, select.chars_into_line + delta)
+
+    # Insert `what` at `location` and return length of `what`
     def insert(self, select: Selection, what: str) -> int:
         self.text = self.text[: select.start] + what + self.text[select.start :]
         return len(what)
@@ -52,72 +113,26 @@ class Text:
         self.delete(select)
         self.insert(select, what)
 
-    # move selection to the next newline
-    def go_line(self, line: int, stay_x: bool = True) -> Selection:
-        pass
 
-    def prev_newline_idx(self, select: Selection) -> int or None:
-        result = self.text[: select.start].rfind(self.newline)
-        return result if not result == -1 else 0
+sel = Selection(0, 5, 1)
+print(sel.__dict__)
+t = Text("test.txt")
+print(t.data)
+"""
+0123
+ABC
 
-    def next_newline_idx(self, select: Selection) -> int:
-        result = self.text[select.start :].find(self.newline)
-        return result if not result == -1 else len(self.text) - 1
+456
+DE
 
-    def go_line_up(self, select: Selection) -> Selection:
-        """
-        012345
-        ABOVEn
+789 10
+YOh
+"""
+print(f"'{t.selected_text(sel)}'")
+print(f"cur line: {t.line_num(sel)}")
+sel = t.move_to_line(sel, t.line_num(sel) + 1)
+sel = t.move_to_line(sel, t.line_num(sel) + 1)
+print(f"cur line: {t.line_num(sel)}")
 
-        678
-        ABn
-
-        9 10 11 12 13 14
-        C D  E  F  G  n
-             ^
-        """
-        prev_newline_idx = self.prev_newline_idx(select)
-        prev_prev_newline_idx = self.prev_newline_idx(Selection(prev_newline_idx))
-
-        if prev_newline_idx == prev_prev_newline_idx:
-            print("STH WRONG, THE END OR START REACHED")
-            return select
-
-        above_line_len = prev_newline_idx - prev_prev_newline_idx
-        chars_into_line = select.start - prev_newline_idx
-        
-        # Is a wish set, and is it valid?
-        if select.wish_x_start and select.wish_x_start <= above_line_len:
-            new_select = Selection(prev_prev_newline_idx + select.wish_x_start-1)
-
-        # Can I move up one line at my current chars_into_line position?
-        elif above_line_len < chars_into_line:
-            # No I can't, but I'd wish to
-            new_select = Selection(prev_newline_idx-1)
-            new_select.wish_x_start = chars_into_line
-        else:
-            # Yes I can.
-            # -1 so we don't end up with the cursor ON the newline
-            new_select = Selection(prev_prev_newline_idx + chars_into_line-1)
-
-        new_select.end = new_select.start + (select.end - select.start)
-        return new_select
-
-T = Text(None)
-T.text = "ABOVE\nAB\nCDEFG\n"
-select = Selection(11, 12)
-
-print(T.text[select.start : select.end])
-print("initial selection: ", select.__dict__)
-print(T.text.replace('\n', 'n'))
-
-def do_test(n, sel):
-    for _ in range(n):
-        sel = T.go_line_up(sel)
-        print("new selection: ", sel.__dict__)
-        print(T.text[sel.start : sel.end].replace('\n', 'n'))
-    return sel
-
-select = do_test(4, select)
-T.replace(select, "!")
-print(T.text.replace('\n', 'n'))
+print(sel.__dict__)
+print(f"'{t.selected_text(sel)}'")

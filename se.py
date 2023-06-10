@@ -3,31 +3,27 @@ from enum import Enum, auto
 
 # Modify this to your liking
 class Config:
-    newlines = ("\n", "\r\n")
-    default_newline = newlines[0]
+    # how tabs (\t) should be represented
     tab_size = 4
 
-
 class Selection:
-    def __init__(self, start: int = 0, end: int = 1, offset: int = 1):
+    def __init__(self, start: int = 0, end: int =1, wish_x: int = None):
         self.start = start
         self.end = end
-        self.chars_into_line = offset
 
+        self.wish_x = wish_x
 
-class LineDir(Enum):
-    Up = auto()
-    Down = auto()
-    Left = auto()
-    Right = auto()
-
+class FindMode(Enum):
+    Global = auto()
+    Below = auto()
+    In = auto()
+    Above = auto()
 
 # This class allows modification of selections and the text itself, according 
 # to any given selections.
 class Text:
     def __init__(self, path: str = None):
-        self.newline = Config.default_newline
-        self.data = self.newline
+        self.data = "\n"
         self.path = path
 
         self.read()
@@ -36,81 +32,69 @@ class Text:
         try:
             with open(self.path, "r") as f:
                 self.data = f.read()
+                # re-encode all the newline breaks to be uniform \n's
+                self.data = "\n".join(self.data.splitlines()) + "\n"
         except FileNotFoundError:
             self.write()
 
     def write(self):
         with open(self.path, "w") as f:
             f.write(self.data)
-    
-    # Return text in `select`
+
+    # Return text range by `select`
     def selected_text(self, select: Selection) -> str:
         return self.data[select.start : select.end]
 
-    # Return the line select.start is currently on.
-    def line_num(self, select: Selection) -> int:
-        # Count the number of newline characters before the start of the selection.
-        return self.data.count(self.newline, 0, select.start)
+    def line_lengths(self) -> [int]:
+        return list(map(len, self.data.splitlines()))
 
-    # Move the `select` to a specific line and/or char in the data.
-    def line(self, select: Selection, line_num: int, x_pos: int = 1, cache: [str] = None) -> Selection:
+    def convert_yx_to_sel(self, select: Selection, y: int, x: int, line_lengths: [int]=None) -> Selection:
+        if not line_lengths:
+            line_lengths = self.line_lengths()
 
-        # temporarily create a list of lines of text, or use the cache
-        lines = cache
-        if not cache:
-            lines = self.data.split(self.newline)[:-1]
+        if select.wish_x is not None and select.wish_x < line_lengths[y]:
+            x = select.wish_x
+            select.wish_x = None
+        elif x >= line_lengths[y]:
+            x = line_lengths[y] - 1
+            select.wish_x = x
 
-        # use the correct line (wrap lines around max)
-        line_num %= len(lines)
+        selection_length = select.end - select.start
 
-        # if specified, set the x starting pos
-        if x_pos > 1:
-            select.chars_into_line = x_pos
+        select.start = sum(line_lengths[:y]) + y + x
+        select.end = select.start + selection_length
 
-        chars_into_line = select.chars_into_line
-        if chars_into_line < 1:
-            offset = 1 - (chars_into_line + 1)
-            l = (line_num - 1) % len(lines)
-            select.chars_into_line = len(lines[l]) - offset
+        return select
 
-            return self.line(select, l, cache=lines)
+    def current_yx(self, index: int, line_lengths: [int] = None) -> (int, int):
+        if not line_lengths:
+            line_lengths = self.line_lengths()
 
-        elif chars_into_line > len(lines[line_num]):
-            cur_len = len(lines[line_num])
-            select.chars_into_line = chars_into_line - cur_len
+        total_length = sum(line_lengths)
 
-            return self.line(select, (line_num + 1) % len(lines), cache=lines)
+        # as a safty measure
+        index %= total_length + 1
 
-        # find the starting index of `line_num`
-        start = chars_into_line - 1  # -1 since start is an index, and chars_into_line is not
-        for i in range(line_num):
-            start += len(lines[i]) + len(self.newline)
+        line_start = 0
+        for i, line_length in enumerate(line_lengths):
+            line_end = line_start + line_length
+            if index < line_end:
+                return i, index - line_start
+            line_start = line_end + 1
 
-        # update end of selection
-        end = start + (select.end - select.start)
+    def goto(self, select: Selection, y: int = 0, x: int = 0, dy: int = 0, dx: int = 0) -> Selection:
+        line_lengths = self.line_lengths()
 
-        # we never want the end to exceed the actual file length
-        max_len = len(self.data) - len(self.newline)
-        if end > max_len:
-            end = max_len
+        if dy or dx:
+            current_y, current_x = self.current_yx(select.start, line_lengths)
+            y += current_y + dy
+            x += current_x + dx
 
-        return Selection(start, end, select.chars_into_line)
+        y %= len(line_lengths) +1
+        x %= line_lengths[y]
 
-    # Move around the given selection using deltas instead of absolute values.
-    def line_delta(self, select: Selection, direction: LineDir, delta: int = 1) -> Selection:
-        delta = abs(delta)
-        if direction in LineDir:
-            if direction in (LineDir.Up, LineDir.Left):
-                delta = -delta
-
-            if direction in (LineDir.Up, LineDir.Down):
-                return self.line(select, self.line_num(select) + delta)
-
-            elif direction in (LineDir.Left, LineDir.Right):
-                select.chars_into_line += delta
-                return self.line(select, self.line_num(select))
-        else:
-            raise ValueError("Wrong direction specified.")
+        new_select = self.convert_yx_to_sel(select, y, x, line_lengths)
+        return new_select
 
     # Insert `what` at `location` and return length of `what`
     def insert(self, select: Selection, what: str) -> int:
@@ -126,28 +110,37 @@ class Text:
         self.delete(select)
         self.insert(select, With)
 
+    # Modes: find below, IN, above the selection OR globally. 
+    def find(self, mode: FindMode=FindMode.Global, expr: str = "", select: Selection = None) -> [Selection]:
+        match mode:
+            case FindMode.Global:
+                area = self.data
+                start = 0
 
-sel = Selection(0, 2, 1)
-print(sel.__dict__)
+            case FindMode.Below:
+                area = self.data[select.end :]
+                start = select.end
+
+            case FindMode.In:
+                area = self.selected_text(select)
+                start = select.start
+
+            case FindMode.Above:
+                area = self.data[: select.start]
+                start = 0
+
+            case _:
+                raise TypeError("Invalid FindMode specified.")
+
+
+        ctx = re.compile(expr)
+        # https://stackoverflow.com/questions/250271/python-regex-how-to-get-positions-and-values-of-matches
+        import re
+
+# Example usage:
+select = Selection(0, 3)
 t = Text("test.txt")
-"""
-0123
-ABC
 
-456
-DE
-
-789 10
-YOh
-"""
-print(f"'{t.selected_text(sel)}'")
-print(f"cur line: {t.line_num(sel)}")
-
-sel = t.line_delta(sel, LineDir.Down, delta=2)
-sel = t.line(sel, line_num=0, x_pos=4)
-# sel = t.line_delta(sel, LineDir.Right, 3)
-
-print(f"cur line: {t.line_num(sel)}")
-
-print(sel.__dict__)
-print(f"'{t.selected_text(sel)}'")
+select = t.goto(select, dy=2, dx=-1)
+print(t.selected_text(select))
+print(select.__dict__)

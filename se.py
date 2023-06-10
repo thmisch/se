@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 from enum import Enum, auto
 
+
 # Modify this to your liking
 class Config:
     # how tabs (\t) should be represented
     tab_size = 4
 
+
 class Selection:
-    def __init__(self, start: int = 0, end: int =1, wish_x: int = None):
+    def __init__(self, start: int = 0, end: int = 1, wish_x: int = None):
         self.start = start
         self.end = end
 
         self.wish_x = wish_x
+
 
 class FindMode(Enum):
     Global = auto()
@@ -19,7 +22,8 @@ class FindMode(Enum):
     In = auto()
     Above = auto()
 
-# This class allows modification of selections and the text itself, according 
+
+# This class allows modification of selections and the text itself, according
 # to any given selections.
 class Text:
     def __init__(self, path: str = None):
@@ -48,7 +52,7 @@ class Text:
     def line_lengths(self) -> [int]:
         return list(map(len, self.data.splitlines()))
 
-    def convert_yx_to_sel(self, select: Selection, y: int, x: int, line_lengths: [int]=None) -> Selection:
+    def convert_yx_to_sel(self, select: Selection, y: int, x: int, line_lengths: [int] = None) -> Selection:
         if not line_lengths:
             line_lengths = self.line_lengths()
 
@@ -90,7 +94,7 @@ class Text:
             y += current_y + dy
             x += current_x + dx
 
-        y %= len(line_lengths) +1
+        y %= len(line_lengths) + 1
         x %= line_lengths[y]
 
         new_select = self.convert_yx_to_sel(select, y, x, line_lengths)
@@ -110,8 +114,8 @@ class Text:
         self.delete(select)
         self.insert(select, With)
 
-    # Modes: find below, IN, above the selection OR globally. 
-    def find(self, mode: FindMode=FindMode.Global, expr: str = "", select: Selection = None) -> [Selection]:
+    # Modes: find below, IN, above the selection OR globally.
+    def find(self, mode: FindMode = FindMode.Global, expr: str = "", select: Selection = None) -> [Selection]:
         match mode:
             case FindMode.Global:
                 area = self.data
@@ -132,10 +136,10 @@ class Text:
             case _:
                 raise TypeError("Invalid FindMode specified.")
 
-
         ctx = re.compile(expr)
         # https://stackoverflow.com/questions/250271/python-regex-how-to-get-positions-and-values-of-matches
         import re
+
 
 # Example usage:
 select = Selection(0, 3)

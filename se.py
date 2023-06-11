@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from enum import Enum, auto
-
+import re
 
 # Modify this to your liking
 class Config:
@@ -138,8 +138,11 @@ class Text:
 
         ctx = re.compile(expr)
         # https://stackoverflow.com/questions/250271/python-regex-how-to-get-positions-and-values-of-matches
-        import re
-
+        matches = [Selection(m.start() + start, m.end() + start) for m in ctx.finditer(area)]
+        # TODO: implement messages
+        #if not matches:
+        #    self.ui.message.put(Message.Error, "No Matches found.")
+        #    pass
 
 # Example usage:
 select = Selection(0, 3)

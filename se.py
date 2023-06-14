@@ -28,9 +28,9 @@ class FindMode(Enum):
 class Text:
     def __init__(self, path: str = None):
         self.data = "\n"
-        self.path = path
-
-        self.read()
+        if path:
+            self.path = path
+            self.read()
 
     def read(self):
         try:
@@ -135,19 +135,29 @@ class Text:
 
             case _:
                 raise TypeError("Invalid FindMode specified.")
-
-        ctx = re.compile(expr)
-        # https://stackoverflow.com/questions/250271/python-regex-how-to-get-positions-and-values-of-matches
-        matches = [Selection(m.start() + start, m.end() + start) for m in ctx.finditer(area)]
-        # TODO: implement messages
-        #if not matches:
-        #    self.ui.message.put(Message.Error, "No Matches found.")
-        #    pass
+        try:
+            ctx = re.compile(expr)
+            matches = [Selection(m.start() + start, m.end() + start) for m in ctx.finditer(area)]
+            # TODO: implement messages
+            #if not matches:
+            #    self.ui.message.put(Message.Error, "No Matches found.")
+            #    pass
+            return matches
+        except re.error as err:
+            self.ui.message.put(Message.Error, f"Bad expression: {err}")
 
 # Example usage:
-select = Selection(0, 3)
+select = Selection(0, 5)
 t = Text("test.txt")
 
-select = t.goto(select, dy=2, dx=-1)
+select = t.goto(select, dy=0, dx=0)
 print(t.selected_text(select))
 print(select.__dict__)
+
+matches = t.find(FindMode.Below, "*", select)
+for match in matches:
+    print("Matched:", t.selected_text(match))
+
+if __name__ == "__main__":
+    # init UI, ncurses, main loop
+    pass

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from enum import Enum, auto
+from pathlib import Path
 import re
 
 # Modify this to your liking
@@ -26,24 +27,23 @@ class FindMode(Enum):
 # This class allows modification of selections and the text itself, according
 # to any given selections.
 class Text:
-    def __init__(self, path: str = None):
+    def __init__(self, path: Path = None):
         self.data = "\n"
-        if path:
-            self.path = path
-            self.read()
+        self.path = path
+
 
     def read(self):
-        try:
-            with open(self.path, "r") as f:
-                self.data = f.read()
+        if self.path:
+            try:
+                self.data = self.path.read_text()
                 # re-encode all the newline breaks to be uniform \n's
                 self.data = "\n".join(self.data.splitlines()) + "\n"
-        except FileNotFoundError:
-            self.write()
+            except FileNotFoundError:
+                pass
+        self.write()
 
     def write(self):
-        with open(self.path, "w") as f:
-            f.write(self.data)
+        self.path.write_text(self.data)
 
     # Return text range by `select`
     def selected_text(self, select: Selection) -> str:
@@ -70,7 +70,7 @@ class Text:
 
         return select
 
-    def current_yx(self, index: int, line_lengths: [int] = None) -> (int, int):
+    def current_yx(self, index: int, line_lengths: [int] = None, human = False) -> (int, int):
         if not line_lengths:
             line_lengths = self.line_lengths()
 
@@ -83,6 +83,8 @@ class Text:
         for i, line_length in enumerate(line_lengths):
             line_end = line_start + line_length
             if index < line_end:
+                if human:
+                    i += 1 ; index += 1
                 return i, index - line_start
             line_start = line_end + 1
 
@@ -135,6 +137,8 @@ class Text:
 
             case _:
                 raise TypeError("Invalid FindMode specified.")
+
+        matches = [select]
         try:
             ctx = re.compile(expr)
             matches = [Selection(m.start() + start, m.end() + start) for m in ctx.finditer(area)]
@@ -142,9 +146,10 @@ class Text:
             #if not matches:
             #    self.ui.message.put(Message.Error, "No Matches found.")
             #    pass
-            return matches
         except re.error as err:
             self.ui.message.put(Message.Error, f"Bad expression: {err}")
+
+        return matches
 
 # Example usage:
 select = Selection(0, 5)
